@@ -1,5 +1,17 @@
 # Changelog
 
+## [0.2.0](https://github.com/berkayyildirim/mcp-tfstate-reader/compare/v0.1.2...v0.2.0) (2026-03-04)
+
+
+### Features
+
+* add 10 new AWS audit rules to security scanner ([704a3f9](https://github.com/berkayyildirim/mcp-tfstate-reader/commit/704a3f9b3a902b0c3c8aa9b1ed23ae40be268cb5))
+
+
+### Bug Fixes
+
+* remove bump-patch-for-minor-pre-major for standard semver behaviour ([9c7a535](https://github.com/berkayyildirim/mcp-tfstate-reader/commit/9c7a535533e90222330f28ad41e7552100a2e486))
+
 ## [0.1.2](https://github.com/berkayyildirim/mcp-tfstate-reader/compare/v0.1.1...v0.1.2) (2026-03-03)
 
 
