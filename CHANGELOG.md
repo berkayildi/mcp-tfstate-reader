@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.1.3](https://github.com/berkayyildirim/mcp-tfstate-reader/compare/v0.1.2...v0.1.3) (2026-03-04)
+
+
+### Features
+
+* add 10 new AWS audit rules to security scanner ([704a3f9](https://github.com/berkayyildirim/mcp-tfstate-reader/commit/704a3f9b3a902b0c3c8aa9b1ed23ae40be268cb5))
+
 ## [0.1.2](https://github.com/berkayyildirim/mcp-tfstate-reader/compare/v0.1.1...v0.1.2) (2026-03-03)
 
 
