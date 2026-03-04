@@ -74,10 +74,13 @@ async def list_tools() -> list[types.Tool]:
             name="audit_security",
             description=(
                 "Scan a Terraform .tfstate file for common security misconfigurations. "
-                "Checks: S3 buckets without encryption, security groups open to 0.0.0.0/0 on "
-                "sensitive ports (22, 3389, 5432), IAM policies with wildcard (*) actions, "
-                "unencrypted RDS instances, public EC2 instances, and CloudWatch log groups "
-                "without retention policies."
+                "Checks: S3 buckets without encryption or versioning, public S3 ACLs, "
+                "security groups open to 0.0.0.0/0 on sensitive ports (22, 3389, 5432), "
+                "IAM policies with wildcard (*) actions, unencrypted RDS/EBS volumes, "
+                "publicly accessible RDS instances, public EC2 instances, Lambda functions "
+                "not in a VPC, KMS keys without rotation, ElastiCache without transit "
+                "encryption, unencrypted SNS/SQS, load balancers without access logs, "
+                "and CloudWatch log groups without retention policies."
             ),
             inputSchema={
                 "type": "object",
@@ -163,6 +166,26 @@ async def _audit_security(arguments: dict[str, Any]) -> list[types.TextContent]:
                 )
 
         # ------------------------------------------------------------------
+        # S3: versioning
+        # ------------------------------------------------------------------
+        if rtype == "aws_s3_bucket":
+            versioning = attrs.get("versioning")
+            if not versioning or not versioning[0].get("enabled", False):
+                findings.append(
+                    f"[MEDIUM] {address}: S3 bucket does not have versioning enabled."
+                )
+
+        # ------------------------------------------------------------------
+        # S3 ACL: public access
+        # ------------------------------------------------------------------
+        if rtype == "aws_s3_bucket_acl":
+            acl = attrs.get("acl", "")
+            if acl in ("public-read", "public-read-write"):
+                findings.append(
+                    f"[HIGH] {address}: S3 bucket ACL is set to '{acl}' — allows public access."
+                )
+
+        # ------------------------------------------------------------------
         # Security groups: wide-open ingress on sensitive ports
         # ------------------------------------------------------------------
         if rtype == "aws_security_group":
@@ -236,6 +259,15 @@ async def _audit_security(arguments: dict[str, Any]) -> list[types.TextContent]:
                 )
 
         # ------------------------------------------------------------------
+        # RDS: publicly accessible
+        # ------------------------------------------------------------------
+        if rtype == "aws_db_instance":
+            if attrs.get("publicly_accessible", False):
+                findings.append(
+                    f"[HIGH] {address}: RDS instance is publicly accessible."
+                )
+
+        # ------------------------------------------------------------------
         # EC2: public IP assignment
         # ------------------------------------------------------------------
         if rtype == "aws_instance":
@@ -253,6 +285,71 @@ async def _audit_security(arguments: dict[str, Any]) -> list[types.TextContent]:
                 findings.append(
                     f"[MEDIUM] {address}: CloudWatch log group has no retention policy "
                     "(logs kept indefinitely)."
+                )
+
+        # ------------------------------------------------------------------
+        # EBS: encryption
+        # ------------------------------------------------------------------
+        if rtype == "aws_ebs_volume":
+            if not attrs.get("encrypted", False):
+                findings.append(
+                    f"[HIGH] {address}: EBS volume is not encrypted."
+                )
+
+        # ------------------------------------------------------------------
+        # Lambda: VPC configuration
+        # ------------------------------------------------------------------
+        if rtype == "aws_lambda_function":
+            vpc_config = attrs.get("vpc_config")
+            if not vpc_config or not vpc_config[0].get("subnet_ids"):
+                findings.append(
+                    f"[MEDIUM] {address}: Lambda function is not deployed in a VPC."
+                )
+
+        # ------------------------------------------------------------------
+        # KMS: key rotation
+        # ------------------------------------------------------------------
+        if rtype == "aws_kms_key":
+            if not attrs.get("enable_key_rotation", False):
+                findings.append(
+                    f"[MEDIUM] {address}: KMS key does not have automatic key rotation enabled."
+                )
+
+        # ------------------------------------------------------------------
+        # ElastiCache: transit encryption
+        # ------------------------------------------------------------------
+        if rtype == "aws_elasticache_replication_group":
+            if not attrs.get("transit_encryption_enabled", False):
+                findings.append(
+                    f"[HIGH] {address}: ElastiCache replication group does not have transit encryption enabled."
+                )
+
+        # ------------------------------------------------------------------
+        # SNS: encryption at rest
+        # ------------------------------------------------------------------
+        if rtype == "aws_sns_topic":
+            if not attrs.get("kms_master_key_id"):
+                findings.append(
+                    f"[MEDIUM] {address}: SNS topic is not encrypted with a KMS key."
+                )
+
+        # ------------------------------------------------------------------
+        # SQS: encryption at rest
+        # ------------------------------------------------------------------
+        if rtype == "aws_sqs_queue":
+            if not attrs.get("kms_master_key_id"):
+                findings.append(
+                    f"[MEDIUM] {address}: SQS queue is not encrypted with a KMS key."
+                )
+
+        # ------------------------------------------------------------------
+        # ALB/NLB: access logs
+        # ------------------------------------------------------------------
+        if rtype == "aws_lb":
+            access_logs = attrs.get("access_logs")
+            if not access_logs or not access_logs[0].get("enabled", False):
+                findings.append(
+                    f"[MEDIUM] {address}: Load balancer does not have access logs enabled."
                 )
 
     if not findings:

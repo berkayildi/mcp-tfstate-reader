@@ -67,7 +67,7 @@ def test_iter_resources_returns_all():
 async def test_list_resources_counts():
     result = await _list_resources({"tfstate_path": FIXTURE})
     text = _text(result)
-    assert "Found 13 resource(s)" in text
+    assert "Found 33 resource(s)" in text
 
 
 async def test_list_resources_contains_addresses():
@@ -195,6 +195,176 @@ async def test_audit_cloudwatch_with_retention_not_flagged():
     assert "aws_cloudwatch_log_group.with_retention" not in text
 
 
+# ---------------------------------------------------------------------------
+# audit_security — EBS
+# ---------------------------------------------------------------------------
+
+async def test_audit_ebs_unencrypted_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_ebs_volume.unencrypted_ebs" in text
+    assert "not encrypted" in text
+
+
+async def test_audit_ebs_encrypted_not_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_ebs_volume.encrypted_ebs" not in text
+
+
+# ---------------------------------------------------------------------------
+# audit_security — S3 versioning
+# ---------------------------------------------------------------------------
+
+async def test_audit_s3_unversioned_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_s3_bucket.unversioned_bucket" in text
+    assert "versioning" in text.lower()
+
+
+async def test_audit_s3_versioned_not_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_s3_bucket.versioned_bucket" not in text
+
+
+# ---------------------------------------------------------------------------
+# audit_security — S3 ACL
+# ---------------------------------------------------------------------------
+
+async def test_audit_s3_acl_public_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_s3_bucket_acl.public_acl" in text
+    assert "public" in text.lower()
+
+
+async def test_audit_s3_acl_private_not_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_s3_bucket_acl.private_acl" not in text
+
+
+# ---------------------------------------------------------------------------
+# audit_security — RDS publicly accessible
+# ---------------------------------------------------------------------------
+
+async def test_audit_rds_public_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_db_instance.public_db" in text
+    assert "publicly accessible" in text
+
+
+async def test_audit_rds_private_not_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_db_instance.private_db" not in text
+
+
+# ---------------------------------------------------------------------------
+# audit_security — Lambda VPC
+# ---------------------------------------------------------------------------
+
+async def test_audit_lambda_no_vpc_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_lambda_function.no_vpc_lambda" in text
+    assert "VPC" in text
+
+
+async def test_audit_lambda_vpc_not_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_lambda_function.vpc_lambda" not in text
+
+
+# ---------------------------------------------------------------------------
+# audit_security — KMS key rotation
+# ---------------------------------------------------------------------------
+
+async def test_audit_kms_no_rotation_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_kms_key.no_rotation_key" in text
+    assert "rotation" in text.lower()
+
+
+async def test_audit_kms_rotation_not_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_kms_key.rotation_key" not in text
+
+
+# ---------------------------------------------------------------------------
+# audit_security — ElastiCache transit encryption
+# ---------------------------------------------------------------------------
+
+async def test_audit_elasticache_unencrypted_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_elasticache_replication_group.unencrypted_cache" in text
+    assert "transit encryption" in text
+
+
+async def test_audit_elasticache_encrypted_not_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_elasticache_replication_group.encrypted_cache" not in text
+
+
+# ---------------------------------------------------------------------------
+# audit_security — SNS encryption
+# ---------------------------------------------------------------------------
+
+async def test_audit_sns_unencrypted_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_sns_topic.unencrypted_sns" in text
+    assert "KMS" in text
+
+
+async def test_audit_sns_encrypted_not_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_sns_topic.encrypted_sns" not in text
+
+
+# ---------------------------------------------------------------------------
+# audit_security — SQS encryption
+# ---------------------------------------------------------------------------
+
+async def test_audit_sqs_unencrypted_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_sqs_queue.unencrypted_sqs" in text
+    assert "KMS" in text
+
+
+async def test_audit_sqs_encrypted_not_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_sqs_queue.encrypted_sqs" not in text
+
+
+# ---------------------------------------------------------------------------
+# audit_security — Load balancer access logs
+# ---------------------------------------------------------------------------
+
+async def test_audit_lb_no_logs_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_lb.no_logs_lb" in text
+    assert "access logs" in text
+
+
+async def test_audit_lb_logs_not_flagged():
+    result = await _audit_security({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_lb.logs_lb" not in text
+
+
 async def test_audit_clean_state_no_findings(tmp_path):
     clean = {
         "version": 4,
@@ -208,6 +378,7 @@ async def test_audit_clean_state_no_findings(tmp_path):
                         "attributes": {
                             "id": "safe-bucket",
                             "server_side_encryption_configuration": [{"rule": []}],
+                            "versioning": [{"enabled": True, "mfa_delete": False}],
                         }
                     }
                 ],

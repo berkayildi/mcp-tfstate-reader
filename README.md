@@ -27,11 +27,19 @@ Terraform state files are the single source of truth for what's actually deploye
 
 ### Security checks in `audit_security`
 
-- **S3** — buckets without server-side encryption
+- **S3** — buckets without server-side encryption; buckets without versioning enabled
+- **S3 ACL** — bucket ACLs set to `public-read` or `public-read-write`
 - **Security Groups** — ingress rules open to `0.0.0.0/0` on sensitive ports: 22 (SSH), 3389 (RDP), 5432 (PostgreSQL)
 - **IAM** — policies with wildcard `*` actions (full admin access)
-- **RDS** — instances without `storage_encrypted = true`
+- **RDS** — instances without `storage_encrypted = true`; publicly accessible instances
+- **EBS** — volumes without encryption
 - **EC2** — instances with `associate_public_ip_address = true`
+- **Lambda** — functions not deployed in a VPC
+- **KMS** — keys without automatic key rotation enabled
+- **ElastiCache** — replication groups without transit encryption
+- **SNS** — topics without KMS encryption
+- **SQS** — queues without KMS encryption
+- **ALB/NLB** — load balancers without access logs enabled
 - **CloudWatch** — log groups without a retention policy
 
 ---
@@ -119,14 +127,24 @@ Fully quit (`Cmd+Q` on macOS) and reopen. Look for the tools icon to confirm the
 Claude autonomously chains the tools — listing resources first, running the audit, then drilling into critical findings:
 
 ```
-Found 7 finding(s):
+Found 17 finding(s):
 
 [CRITICAL] aws_iam_policy.admin: IAM policy contains a wildcard (*) action — grants unrestricted permissions.
 [HIGH] aws_s3_bucket.assets: S3 bucket has no server-side encryption configuration.
+[HIGH] aws_s3_bucket_acl.assets: S3 bucket ACL is set to 'public-read' — allows public access.
 [HIGH] aws_security_group.bastion: Security group allows 0.0.0.0/0 ingress on port 22.
 [HIGH] aws_security_group.rdp_open: Security group allows 0.0.0.0/0 ingress on port 3389.
 [HIGH] aws_db_instance.prod: RDS instance storage is not encrypted.
+[HIGH] aws_db_instance.prod: RDS instance is publicly accessible.
+[HIGH] aws_ebs_volume.data: EBS volume is not encrypted.
+[HIGH] aws_elasticache_replication_group.sessions: ElastiCache replication group does not have transit encryption enabled.
+[MEDIUM] aws_s3_bucket.assets: S3 bucket does not have versioning enabled.
 [MEDIUM] aws_instance.web: EC2 instance has a public IP address assigned.
+[MEDIUM] aws_lambda_function.processor: Lambda function is not deployed in a VPC.
+[MEDIUM] aws_kms_key.app: KMS key does not have automatic key rotation enabled.
+[MEDIUM] aws_sns_topic.alerts: SNS topic is not encrypted with a KMS key.
+[MEDIUM] aws_sqs_queue.jobs: SQS queue is not encrypted with a KMS key.
+[MEDIUM] aws_lb.frontend: Load balancer does not have access logs enabled.
 [MEDIUM] aws_cloudwatch_log_group.app: CloudWatch log group has no retention policy (logs kept indefinitely).
 ```
 

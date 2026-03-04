@@ -54,6 +54,24 @@ SENSITIVE_PORTS = {22, 3389, 5432}
 
 To add more ports, update this set in `server.py` and add corresponding test cases in `test_server.py`.
 
+## Audit categories
+
+The `_audit_security` function checks 16 resource types across these categories:
+
+- **S3** — encryption, versioning, public ACLs (`aws_s3_bucket`, `aws_s3_bucket_acl`)
+- **Security Groups** — open ingress on sensitive ports (`aws_security_group`, `aws_vpc_security_group_ingress_rule`)
+- **IAM** — wildcard actions (`aws_iam_policy`, `aws_iam_role_policy`, `aws_iam_user_policy`)
+- **RDS** — encryption at rest, public accessibility (`aws_db_instance`)
+- **EBS** — volume encryption (`aws_ebs_volume`)
+- **EC2** — public IP assignment (`aws_instance`)
+- **Lambda** — VPC configuration (`aws_lambda_function`)
+- **KMS** — key rotation (`aws_kms_key`)
+- **ElastiCache** — transit encryption (`aws_elasticache_replication_group`)
+- **SNS** — KMS encryption (`aws_sns_topic`)
+- **SQS** — KMS encryption (`aws_sqs_queue`)
+- **ALB/NLB** — access logs (`aws_lb`)
+- **CloudWatch** — log retention (`aws_cloudwatch_log_group`)
+
 ---
 
 ## Adding a new audit check
