@@ -1,5 +1,12 @@
 # Changelog
 
+## [0.3.0](https://github.com/berkayyildirim/mcp-tfstate-reader/compare/v0.2.0...v0.3.0) (2026-03-05)
+
+
+### Features
+
+* add summarize_state and compare_states tools ([d5fcf82](https://github.com/berkayyildirim/mcp-tfstate-reader/commit/d5fcf82748a3d890dbf3edca9b5bc7096af0959d))
+
 ## [0.2.0](https://github.com/berkayyildirim/mcp-tfstate-reader/compare/v0.1.2...v0.2.0) (2026-03-04)
 
 
