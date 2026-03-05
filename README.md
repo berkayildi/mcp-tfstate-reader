@@ -24,6 +24,8 @@ Terraform state files are the single source of truth for what's actually deploye
 | `list_resources`      | Parse a `.tfstate` file and list every managed resource with its address and type |
 | `audit_security`      | Scan for common misconfigurations (see below)                                     |
 | `get_resource_detail` | Dump the full attributes of a specific resource by address                        |
+| `summarize_state`     | High-level overview: resource counts by type/module, providers, tags, regions     |
+| `compare_states`      | Infrastructure drift detection — diff two state files for added/removed/modified  |
 
 ### Security checks in `audit_security`
 

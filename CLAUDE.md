@@ -4,7 +4,7 @@ This file helps Claude Code understand the project structure and conventions for
 
 ## Project overview
 
-**mcp-tfstate-reader** is a local MCP (Model Context Protocol) server written in Python. It parses Terraform `.tfstate` files and exposes three tools that allow AI agents to audit infrastructure for security misconfigurations without needing live cloud credentials.
+**mcp-tfstate-reader** is a local MCP (Model Context Protocol) server written in Python. It parses Terraform `.tfstate` files and exposes five tools that allow AI agents to audit infrastructure for security misconfigurations without needing live cloud credentials.
 
 Transport: **stdio** (standard input/output).
 
@@ -38,7 +38,7 @@ mcp-tfstate-reader/
 
 2. **No external dependencies** beyond `mcp` SDK for runtime, and `pytest` + `pytest-asyncio` for tests. Do not add `boto3`, `pydantic`, or other libraries without a strong reason.
 
-3. **Private helpers are directly importable in tests** — the test file imports `_load_tfstate`, `_iter_resources`, `_list_resources`, `_audit_security`, and `_get_resource_detail` directly. Keep these functions at module level.
+3. **Private helpers are directly importable in tests** — the test file imports `_load_tfstate`, `_iter_resources`, `_list_resources`, `_audit_security`, `_get_resource_detail`, `_summarize_state`, and `_compare_states` directly. Keep these functions at module level.
 
 4. **`asyncio_mode = "auto"`** is set in `pyproject.toml`, so `@pytest.mark.asyncio` is optional but harmless to include.
 
@@ -102,3 +102,5 @@ make test     # pytest tests/ -v
 | `list_resources` | `tfstate_path: str` | Plain text list of addresses |
 | `audit_security` | `tfstate_path: str` | Plain text list of findings or "No findings" |
 | `get_resource_detail` | `tfstate_path: str`, `resource_address: str` | JSON string of resource attributes |
+| `summarize_state` | `tfstate_path: str` | Plain text summary (counts by type/module, providers, tags, regions) |
+| `compare_states` | `tfstate_path_old: str`, `tfstate_path_new: str` | Plain text diff report (added/removed/modified) |

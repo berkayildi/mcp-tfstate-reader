@@ -40,3 +40,8 @@ packages = ["src/mcp_tfstate_reader"]
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
 testpaths = ["tests"]
+
+[project.urls]
+Homepage = "https://github.com/berkayyildirim/mcp-tfstate-reader"
+Repository = "https://github.com/berkayyildirim/mcp-tfstate-reader"
+Changelog = "https://github.com/berkayyildirim/mcp-tfstate-reader/blob/main/CHANGELOG.md"

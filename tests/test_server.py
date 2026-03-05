@@ -1,4 +1,4 @@
-"""Tests for mcp_tfstate_reader.server — list_resources, audit_security, get_resource_detail."""
+"""Tests for mcp_tfstate_reader.server — list_resources, audit_security, get_resource_detail, summarize_state, compare_states."""
 
 import json
 import pytest
@@ -11,9 +11,12 @@ from mcp_tfstate_reader.server import (
     _list_resources,
     _audit_security,
     _get_resource_detail,
+    _summarize_state,
+    _compare_states,
 )
 
 FIXTURE = str(Path(__file__).parent / "fixtures" / "sample.tfstate")
+FIXTURE_MODIFIED = str(Path(__file__).parent / "fixtures" / "sample_modified.tfstate")
 
 
 # ---------------------------------------------------------------------------
@@ -411,3 +414,125 @@ async def test_get_resource_detail_not_found():
         {"tfstate_path": FIXTURE, "resource_address": "aws_s3_bucket.ghost"}
     )
     assert "not found" in _text(result)
+
+
+# ---------------------------------------------------------------------------
+# summarize_state
+# ---------------------------------------------------------------------------
+
+async def test_summarize_total_count():
+    result = await _summarize_state({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "Total resources: 33" in text
+
+
+async def test_summarize_type_grouping():
+    result = await _summarize_state({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "aws_s3_bucket: 4" in text
+    assert "aws_db_instance:" in text
+    assert "aws_instance:" in text
+
+
+async def test_summarize_tagged_untagged():
+    result = await _summarize_state({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "Tagged resources:" in text
+    assert "Untagged resources:" in text
+    # All resources in sample.tfstate have empty tags, so tagged should be 0
+    assert "Tagged resources: 0" in text
+
+
+async def test_summarize_providers():
+    result = await _summarize_state({"tfstate_path": FIXTURE})
+    text = _text(result)
+    assert "Providers: aws" in text
+
+
+async def test_summarize_empty_state(tmp_path):
+    empty = tmp_path / "empty.tfstate"
+    empty.write_text(json.dumps({"version": 4, "resources": []}))
+    result = await _summarize_state({"tfstate_path": str(empty)})
+    assert "0 resources" in _text(result)
+
+
+async def test_summarize_regions():
+    result = await _summarize_state({"tfstate_path": FIXTURE})
+    text = _text(result)
+    # EBS volumes have availability_zone us-east-1a -> region us-east-1
+    assert "us-east-1" in text
+
+
+# ---------------------------------------------------------------------------
+# compare_states
+# ---------------------------------------------------------------------------
+
+async def test_compare_added_resources():
+    result = await _compare_states({
+        "tfstate_path_old": FIXTURE,
+        "tfstate_path_new": FIXTURE_MODIFIED,
+    })
+    text = _text(result)
+    assert "aws_dynamodb_table.sessions" in text
+    assert "aws_ecr_repository.app" in text
+    assert "+ aws_dynamodb_table.sessions" in text
+
+
+async def test_compare_removed_resources():
+    result = await _compare_states({
+        "tfstate_path_old": FIXTURE,
+        "tfstate_path_new": FIXTURE_MODIFIED,
+    })
+    text = _text(result)
+    assert "aws_ebs_volume.unencrypted_ebs" in text
+    assert "aws_sns_topic.unencrypted_sns" in text
+    assert "- aws_ebs_volume.unencrypted_ebs" in text
+
+
+async def test_compare_modified_resources():
+    result = await _compare_states({
+        "tfstate_path_old": FIXTURE,
+        "tfstate_path_new": FIXTURE_MODIFIED,
+    })
+    text = _text(result)
+    # unencrypted_bucket had tags changed
+    assert "~ aws_s3_bucket.unencrypted_bucket" in text
+    assert "tags" in text
+    # public_ec2 had instance_type changed
+    assert "~ aws_instance.public_ec2" in text
+    assert "instance_type" in text
+    # unencrypted_db had storage_encrypted changed
+    assert "~ aws_db_instance.unencrypted_db" in text
+    assert "storage_encrypted" in text
+
+
+async def test_compare_summary_line():
+    result = await _compare_states({
+        "tfstate_path_old": FIXTURE,
+        "tfstate_path_new": FIXTURE_MODIFIED,
+    })
+    text = _text(result)
+    assert "2 added" in text
+    assert "2 removed" in text
+    assert "3 modified" in text
+
+
+async def test_compare_identical():
+    result = await _compare_states({
+        "tfstate_path_old": FIXTURE,
+        "tfstate_path_new": FIXTURE,
+    })
+    assert "No differences found" in _text(result)
+
+
+async def test_compare_with_empty_state(tmp_path):
+    empty = tmp_path / "empty.tfstate"
+    empty.write_text(json.dumps({"version": 4, "resources": []}))
+    # All resources should show as removed
+    result = await _compare_states({
+        "tfstate_path_old": FIXTURE,
+        "tfstate_path_new": str(empty),
+    })
+    text = _text(result)
+    assert "Removed (33)" in text
+    assert "0 added" in text

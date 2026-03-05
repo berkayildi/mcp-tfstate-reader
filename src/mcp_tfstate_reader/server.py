@@ -114,6 +114,45 @@ async def list_tools() -> list[types.Tool]:
                 "required": ["tfstate_path", "resource_address"],
             },
         ),
+        types.Tool(
+            name="summarize_state",
+            description=(
+                "Provide a high-level overview of a Terraform state file: total resource count, "
+                "counts by type and module, providers in use, tagged vs untagged resources, "
+                "and unique regions."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tfstate_path": {
+                        "type": "string",
+                        "description": "Absolute or relative path to the .tfstate file.",
+                    }
+                },
+                "required": ["tfstate_path"],
+            },
+        ),
+        types.Tool(
+            name="compare_states",
+            description=(
+                "Compare two Terraform state files and report infrastructure drift: "
+                "resources added, removed, and modified between the old and new state."
+            ),
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "tfstate_path_old": {
+                        "type": "string",
+                        "description": "Path to the older/baseline .tfstate file.",
+                    },
+                    "tfstate_path_new": {
+                        "type": "string",
+                        "description": "Path to the newer/current .tfstate file.",
+                    },
+                },
+                "required": ["tfstate_path_old", "tfstate_path_new"],
+            },
+        ),
     ]
 
 
@@ -125,6 +164,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> list[types.TextCont
         return await _audit_security(arguments)
     if name == "get_resource_detail":
         return await _get_resource_detail(arguments)
+    if name == "summarize_state":
+        return await _summarize_state(arguments)
+    if name == "compare_states":
+        return await _compare_states(arguments)
     raise ValueError(f"Unknown tool: {name}")
 
 
@@ -386,6 +429,176 @@ async def _get_resource_detail(arguments: dict[str, Any]) -> list[types.TextCont
             text=f"Resource '{target}' not found in state file.",
         )
     ]
+
+
+# ---------------------------------------------------------------------------
+# Tool: summarize_state
+# ---------------------------------------------------------------------------
+
+async def _summarize_state(arguments: dict[str, Any]) -> list[types.TextContent]:
+    path = arguments["tfstate_path"]
+    state = _load_tfstate(path)
+
+    type_counts: dict[str, int] = {}
+    module_counts: dict[str, int] = {}
+    providers: set[str] = set()
+    tagged = 0
+    untagged = 0
+    regions: set[str] = set()
+    total = 0
+
+    for address, rtype, rname, attrs in _iter_resources(state):
+        total += 1
+
+        # Count by type
+        type_counts[rtype] = type_counts.get(rtype, 0) + 1
+
+        # Count by module
+        if "." in address:
+            parts = address.split(".")
+            if parts[0].startswith("module"):
+                mod = ".".join(parts[:-2])  # e.g. module.vpc
+            else:
+                mod = "(root)"
+        else:
+            mod = "(root)"
+        # Simpler: check if the resource dict had a module key
+        # We need to re-derive from address — root has no "module." prefix
+        if address.startswith("module."):
+            # extract module path: everything before the last type.name
+            idx = address.rfind(f"{rtype}.{rname}")
+            mod = address[:idx].rstrip(".")
+        else:
+            mod = "(root)"
+        module_counts[mod] = module_counts.get(mod, 0) + 1
+
+        # Provider from type prefix
+        prefix = rtype.split("_")[0]
+        providers.add(prefix)
+
+        # Tagged vs untagged
+        tags = attrs.get("tags")
+        if tags and isinstance(tags, dict) and len(tags) > 0:
+            tagged += 1
+        else:
+            untagged += 1
+
+        # Regions
+        region = attrs.get("region")
+        if region:
+            regions.add(region)
+        az = attrs.get("availability_zone")
+        if az and isinstance(az, str):
+            # Derive region from AZ (e.g. us-east-1a -> us-east-1)
+            regions.add(az[:-1])
+
+    if total == 0:
+        return [types.TextContent(type="text", text="State file contains 0 resources.")]
+
+    lines: list[str] = []
+    lines.append(f"Total resources: {total}\n")
+
+    # By type (sorted desc by count)
+    lines.append("Resources by type:")
+    for rtype, count in sorted(type_counts.items(), key=lambda x: (-x[1], x[0])):
+        lines.append(f"  {rtype}: {count}")
+
+    # By module
+    lines.append("\nResources by module:")
+    for mod, count in sorted(module_counts.items(), key=lambda x: (-x[1], x[0])):
+        lines.append(f"  {mod}: {count}")
+
+    # Providers
+    lines.append(f"\nProviders: {', '.join(sorted(providers))}")
+
+    # Tagged vs untagged
+    lines.append(f"\nTagged resources: {tagged}")
+    lines.append(f"Untagged resources: {untagged}")
+
+    # Regions
+    if regions:
+        lines.append(f"\nRegions: {', '.join(sorted(regions))}")
+    else:
+        lines.append("\nRegions: none detected")
+
+    return [types.TextContent(type="text", text="\n".join(lines))]
+
+
+# ---------------------------------------------------------------------------
+# Tool: compare_states
+# ---------------------------------------------------------------------------
+
+async def _compare_states(arguments: dict[str, Any]) -> list[types.TextContent]:
+    path_old = arguments["tfstate_path_old"]
+    path_new = arguments["tfstate_path_new"]
+    state_old = _load_tfstate(path_old)
+    state_new = _load_tfstate(path_new)
+
+    # Build address -> (type, attrs) maps
+    def _build_map(state: dict[str, Any]) -> dict[str, tuple[str, dict]]:
+        result: dict[str, tuple[str, dict]] = {}
+        for address, rtype, _, attrs in _iter_resources(state):
+            result[address] = (rtype, attrs)
+        return result
+
+    old_map = _build_map(state_old)
+    new_map = _build_map(state_new)
+
+    old_addrs = set(old_map)
+    new_addrs = set(new_map)
+
+    added = sorted(new_addrs - old_addrs)
+    removed = sorted(old_addrs - new_addrs)
+    common = sorted(old_addrs & new_addrs)
+
+    modified: list[tuple[str, list[str]]] = []
+    unchanged = 0
+
+    for addr in common:
+        old_type, old_attrs = old_map[addr]
+        new_type, new_attrs = new_map[addr]
+        # Find top-level keys that differ
+        all_keys = set(old_attrs) | set(new_attrs)
+        changed_keys: list[str] = []
+        for key in sorted(all_keys):
+            old_val = old_attrs.get(key)
+            new_val = new_attrs.get(key)
+            if json.dumps(old_val, sort_keys=True, default=str) != json.dumps(new_val, sort_keys=True, default=str):
+                changed_keys.append(key)
+        if changed_keys:
+            modified.append((addr, changed_keys))
+        else:
+            unchanged += 1
+
+    if not added and not removed and not modified:
+        return [types.TextContent(type="text", text="No differences found.")]
+
+    lines: list[str] = []
+
+    if added:
+        lines.append(f"Added ({len(added)}):")
+        for addr in added:
+            rtype = new_map[addr][0]
+            lines.append(f"  + {addr}  ({rtype})")
+
+    if removed:
+        if lines:
+            lines.append("")
+        lines.append(f"Removed ({len(removed)}):")
+        for addr in removed:
+            rtype = old_map[addr][0]
+            lines.append(f"  - {addr}  ({rtype})")
+
+    if modified:
+        if lines:
+            lines.append("")
+        lines.append(f"Modified ({len(modified)}):")
+        for addr, keys in modified:
+            lines.append(f"  ~ {addr}  changed: {', '.join(keys)}")
+
+    lines.append(f"\nSummary: {len(added)} added, {len(removed)} removed, {len(modified)} modified, {unchanged} unchanged")
+
+    return [types.TextContent(type="text", text="\n".join(lines))]
 
 
 def main() -> None:
