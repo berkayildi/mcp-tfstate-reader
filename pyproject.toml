@@ -45,6 +45,6 @@ asyncio_mode = "auto"
 testpaths = ["tests"]
 
 [project.urls]
-Homepage = "https://github.com/berkayyildirim/mcp-tfstate-reader"
-Repository = "https://github.com/berkayyildirim/mcp-tfstate-reader"
-Changelog = "https://github.com/berkayyildirim/mcp-tfstate-reader/blob/main/CHANGELOG.md"
+Homepage = "https://github.com/berkayildi/mcp-tfstate-reader"
+Repository = "https://github.com/berkayildi/mcp-tfstate-reader"
+Changelog = "https://github.com/berkayildi/mcp-tfstate-reader/blob/main/CHANGELOG.md"

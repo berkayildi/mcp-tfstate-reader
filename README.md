@@ -174,7 +174,7 @@ MCP servers work with the Claude Desktop app, not claude.ai in your browser. The
 
 ```bash
 # Clone and set up
-git clone https://github.com/berkayyildirim/mcp-tfstate-reader.git
+git clone https://github.com/berkayildi/mcp-tfstate-reader.git
 cd mcp-tfstate-reader
 make setup
 
