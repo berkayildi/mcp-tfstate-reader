@@ -31,6 +31,9 @@ dev = [
     "build>=1.0.0",
 ]
 
+[project.urls]
+Repository = "https://github.com/berkayildi/mcp-tfstate-reader"
+
 [project.scripts]
 mcp-tfstate-reader = "mcp_tfstate_reader.server:main"
 
